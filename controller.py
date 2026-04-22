@@ -9,6 +9,7 @@ Responsibilities:
 """
 
 from __future__ import annotations
+import random
 from world_generator import generate_world
 import numpy as np
 
@@ -40,7 +41,7 @@ class AppController:
         Replace the body of this method when the real pipeline
         (noise_generator → tile_mapper → grid_renderer) is ready.
         """
-        grid = np.array(generate_world(width=40, height=30, seed=42))
+        grid = np.array(generate_world(width=40, height=30, seed=random.randint(0, 1_000_000)))
         self._window.display_grid(grid)
 
     # ------------------------------------------------------------------

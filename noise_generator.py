@@ -1,5 +1,5 @@
 import numpy as np
-from noise import pnoise2
+from opensimplex import OpenSimplex
 
 
 def generate_noise_map(width: int, height: int, scale: float, seed: int) -> np.ndarray:
@@ -21,19 +21,32 @@ def generate_noise_map(width: int, height: int, scale: float, seed: int) -> np.n
     if scale <= 0:
         raise ValueError("scale must be greater than 0.")
 
-    rng = np.random.default_rng(seed)
-    offset_x = rng.integers(0, 250_000)
-    offset_y = rng.integers(0, 250_000)
+    # OpenSimplex accepts the seed directly — same seed always produces
+    # the same noise field, satisfying the reproducibility requirement.
+    gen = OpenSimplex(seed=seed)
 
     noise_map = np.empty((height, width), dtype=np.float64)
 
+    # Layer multiple octaves manually to replicate the fractal detail
+    # that pnoise2's octaves parameter provided.
+    octaves = 6
+    persistence = 0.5
+    lacunarity = 2.0
+
     for y in range(height):
         for x in range(width):
-            nx = (x + offset_x) / scale
-            ny = (y + offset_y) / scale
-            noise_map[y, x] = pnoise2(nx, ny, octaves=6, persistence=0.5, lacunarity=2.0)
+            value = 0.0
+            amplitude = 1.0
+            frequency = 1.0
+            for _ in range(octaves):
+                nx = x / scale * frequency
+                ny = y / scale * frequency
+                value += gen.noise2(nx, ny) * amplitude
+                amplitude *= persistence
+                frequency *= lacunarity
+            noise_map[y, x] = value
 
-    # Normalize from pnoise2 range (~[-1, 1]) to [0, 1]
+    # Normalize from the summed octave range to [0, 1]
     min_val = noise_map.min()
     max_val = noise_map.max()
 
