@@ -27,7 +27,7 @@ from PyQt6.QtGui import QPixmap
 # characters (like &) in the filename safely.
 _HERE = Path(__file__).parent
 SPRITESHEET_PATH = str(
-    _HERE / "Tiles" / "color_tileset_16x16_Jerom&Eiyeron_CC-BY-SA-3.0_8.png"
+    _HERE / "Tiles" / "color_tileset_16x16_Jerom;Eiyeron_CC-BY-SA-3.0_8.png"
 )
 
 TILE_SIZE = 16  # source tile dimensions in pixels (square)
