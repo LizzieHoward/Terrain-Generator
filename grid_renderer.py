@@ -14,6 +14,17 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPixmap, QPainter
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsPixmapItem
 
+from tile_loader import load_tiles
+
+# Maps the integer keys returned by tile_loader to the string tile types
+# used throughout the rest of the pipeline.
+_INT_TO_TILE: Dict[int, str] = {
+    0: "water",
+    1: "grass",
+    2: "trees",
+    3: "rocks",
+}
+
 
 # Fallback colors used when a tile image is missing from the assets folder.
 _FALLBACK_COLORS: Dict[str, str] = {
@@ -44,6 +55,23 @@ class TileRenderer:
         self.assets_dir = assets_dir
         self._pixmap_cache: Dict[str, QPixmap] = {}
         self._scene = QGraphicsScene()
+        self._preload_spritesheet_tiles()
+
+    def _preload_spritesheet_tiles(self) -> None:
+        """
+        Load all tiles from the spritesheet via tile_loader and populate
+        the pixmap cache.  If the spritesheet is missing the fallback
+        colour path in _load_or_create_pixmap() is still used.
+        """
+        try:
+            spritesheet_tiles = load_tiles(display_size=self.tile_size)
+            for int_type, tile_type in _INT_TO_TILE.items():
+                pixmap = spritesheet_tiles.get(int_type)
+                if pixmap and not pixmap.isNull():
+                    self._pixmap_cache[tile_type] = pixmap
+        except FileNotFoundError as exc:
+            # Spritesheet not found — renderer will use colour fallbacks.
+            print(f"[TileRenderer] Spritesheet not loaded: {exc}")
 
     # ------------------------------------------------------------------
     # Public API
