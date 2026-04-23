@@ -125,10 +125,12 @@ class TileRenderer:
         Parameters
         ----------
         tile_grid : np.ndarray
-            A (height x width) array of tile-type strings.
+            A (height x width) numpy object array where each element is a
+            dict with keys ``"base"`` (int) and ``"overlay"`` (int | None),
+            as produced by ``world_generator.generate_world()``.
         seed : int
-            Seed for variant selection.  The same seed + same grid always
-            produces the same visual output.  Defaults to 0.
+            Seed for variant selection so the same grid always renders
+            identically.  Defaults to 0.
 
         Returns
         -------
@@ -144,15 +146,11 @@ class TileRenderer:
 
         for y in range(height):
             for x in range(width):
-                tile_type = str(tile_grid[y, x])
-                if use_variants:
-                    pixmap = self._pick_variant(tile_type, rng)
-                else:
-                    pixmap = self._get_pixmap(tile_type)
-                item = QGraphicsPixmapItem(pixmap)
-                item.setTransformationMode(Qt.TransformationMode.FastTransformation)
-                item.setPos(x * ts, y * ts)
-                self._scene.addItem(item)
+                cell = tile_grid[y, x]
+                # Render terrain base first, then overlay object on top.
+                self._render_base_at(cell["base"], x, y, ts, use_variants, rng)
+                if cell["overlay"] is not None:
+                    self._render_overlay_at(cell["overlay"], x, y, ts, use_variants, rng)
 
         self._scene.setSceneRect(0, 0, width * ts, height * ts)
         return self._scene
@@ -165,6 +163,90 @@ class TileRenderer:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _render_base_at(
+        self,
+        int_type: int,
+        x: int,
+        y: int,
+        ts: int,
+        use_variants: bool,
+        rng,
+    ) -> None:
+        """Render a base terrain tile at grid position (x, y)."""
+        pixmap = self._resolve_pixmap(int_type, use_variants, rng)
+        item = QGraphicsPixmapItem(pixmap)
+        item.setTransformationMode(Qt.TransformationMode.FastTransformation)
+        item.setPos(x * ts, y * ts)
+        self._scene.addItem(item)
+
+    def _render_overlay_at(
+        self,
+        int_type: int,
+        x: int,
+        y: int,
+        ts: int,
+        use_variants: bool,
+        rng,
+    ) -> None:
+        """
+        Render an overlay object tile at grid position (x, y), bottom-aligned
+        to the base tile.
+
+        Overlay sprites may be taller than one tile (e.g. a tree that occupies
+        two tile heights).  The bottom edge of the overlay is pinned to the
+        bottom edge of the base tile so objects sit naturally on the terrain
+        rather than floating or being clipped at the top.
+
+        Vertical offset formula::
+
+            y_offset = pixmap.height() - ts
+            scene_y  = y * ts - y_offset
+        """
+        pixmap = self._resolve_pixmap(int_type, use_variants, rng)
+        y_offset = pixmap.height() - ts
+        item = QGraphicsPixmapItem(pixmap)
+        item.setTransformationMode(Qt.TransformationMode.FastTransformation)
+        item.setPos(x * ts, y * ts - y_offset)
+        self._scene.addItem(item)
+
+    def _resolve_pixmap(
+        self,
+        int_type: int,
+        use_variants: bool,
+        rng,
+    ) -> QPixmap:
+        """
+        Resolve the pixmap for *int_type*, raising if the type is unknown.
+
+        Raises
+        ------
+        KeyError
+            If *int_type* has no registered tile type string.
+        """
+        tile_type = _INT_TO_TILE.get(int_type)
+        if tile_type is None:
+            raise KeyError(
+                f"No tile type string registered for int '{int_type}'. "
+                "Add it to _INT_TO_TILE in grid_renderer.py."
+            )
+        return self._pick_variant(tile_type, rng) if use_variants else self._get_pixmap(tile_type)
+
+    def _render_tile_at(
+        self,
+        int_type: int,
+        x: int,
+        y: int,
+        ts: int,
+        use_variants: bool,
+        rng,
+    ) -> None:
+        """Deprecated: use _render_base_at / _render_overlay_at instead."""
+        pixmap = self._resolve_pixmap(int_type, use_variants, rng)
+        item = QGraphicsPixmapItem(pixmap)
+        item.setTransformationMode(Qt.TransformationMode.FastTransformation)
+        item.setPos(x * ts, y * ts)
+        self._scene.addItem(item)
 
     def _pick_variant(self, tile_type: str, rng: np.random.Generator) -> QPixmap:
         """

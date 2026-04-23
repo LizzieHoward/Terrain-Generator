@@ -26,15 +26,6 @@ from PyQt6.QtWidgets import (
 
 from grid_renderer import TileRenderer
 
-# Maps the integer encoding used by world_generator back to the tile
-# type strings that TileRenderer understands.
-_INT_TO_TILE: dict[int, str] = {
-    0: "water",
-    1: "grass",
-    2: "trees",
-    3: "rocks",
-}
-
 
 class MainWindow(QMainWindow):
     """
@@ -54,7 +45,16 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self._controller = None  # injected after construction by main.py
-        self._renderer = TileRenderer(tile_size=20, assets_dir="assets")
+        self._renderer = TileRenderer(
+            tile_size=20,
+            assets_dir="assets",
+            tile_variants={
+                0: [(0, 7)],           # water
+                1: [(2, 5)],           # grass
+                2: [(5, 5), (7, 5)],   # forest + variant
+                3: [(6, 5), (6, 6)],   # rock + variant
+            },
+        )
         self._setup_ui()
 
     # ------------------------------------------------------------------
@@ -116,13 +116,11 @@ class MainWindow(QMainWindow):
         Parameters
         ----------
         grid : np.ndarray
-            Integer tile grid from the controller.
+            Object array of layered cell dicts from the controller.
         seed : int
-            Passed to the renderer so variant selection is deterministic —
-            the same seed + same grid always produces the same visual output.
+            Passed to the renderer for deterministic variant selection.
         """
-        str_grid = np.vectorize(_INT_TO_TILE.get)(grid)
-        scene = self._renderer.render(str_grid, seed=seed)
+        scene = self._renderer.render(grid, seed=seed)
         self._view.setScene(scene)
 
     # ------------------------------------------------------------------

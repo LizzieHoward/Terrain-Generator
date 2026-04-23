@@ -8,11 +8,17 @@ Responsibilities:
     NumPy or any internal data structure.
   - Contain no UI or rendering logic.
 
-Tile integer encoding:
-    0 = water   (low elevation — noise value ≤ 0.30)
-    1 = grass   (mid elevation — noise value ≤ 0.55)
-    2 = trees   (high elevation — noise value ≤ 0.78)
-    3 = rocks   (peaks         — noise value > 0.78)
+Tile layer structure per cell:
+    {
+        "base":    int        # terrain drawn first (water, grass)
+        "overlay": int | None  # object drawn on top (trees, rocks, or None)
+    }
+
+Encoding:
+    base 0 = water   overlay None
+    base 1 = grass   overlay None
+    base 1 = grass   overlay 2  (trees)
+    base 1 = grass   overlay 3  (rocks)
 
 How Perlin noise drives terrain distribution
 --------------------------------------------
@@ -30,19 +36,20 @@ surface roughness.
 
 from __future__ import annotations
 
-from typing import List
+from typing import Dict, List
 
 from noise_generator import generate_noise_map
 from tile_mapper import TileThresholds, map_tiles
 
 
-# Map the string tile types produced by tile_mapper to the integer
-# encoding expected by the rest of the application.
-_TILE_TO_INT: dict[str, int] = {
-    "water": 0,
-    "grass": 1,
-    "trees": 2,
-    "rocks": 3,
+# Maps each tile type string to a layered cell dict.
+# base  = terrain sprite rendered first.
+# overlay = object sprite rendered on top (None means no overlay).
+_TILE_TO_LAYER: Dict[str, Dict] = {
+    "water": {"base": 0, "overlay": None},
+    "grass": {"base": 1, "overlay": None},
+    "trees": {"base": 1, "overlay": 2},
+    "rocks": {"base": 1, "overlay": 3},
 }
 
 # Default noise scale.  Tweak upward for broader biomes, downward for
@@ -82,7 +89,11 @@ def generate_world(
 
     Returns
     -------
-    A (height × width) 2D list of ints:
+    A (height × width) 2D list of layer dicts::
+
+        {"base": int, "overlay": int | None}
+
+    base and overlay values map to tile type integers:
         0 = water, 1 = grass, 2 = trees, 3 = rocks
     """
     # Step 1 — continuous noise field driven by seed for reproducibility.
@@ -92,8 +103,10 @@ def generate_world(
     # Low noise values → water; mid values → grass/trees; high → rocks.
     tile_grid = map_tiles(noise_map, thresholds=thresholds)
 
-    # Step 3 — convert string tiles to the integer encoding.
+    # Step 3 — convert tile type strings to layered cell dicts.
+    # trees and rocks become overlays on a grass base so terrain and
+    # object sprites can be composited independently by the renderer.
     return [
-        [_TILE_TO_INT.get(str(tile_grid[y, x]), 0) for x in range(width)]
+        [_TILE_TO_LAYER[str(tile_grid[y, x])] for x in range(width)]
         for y in range(height)
     ]

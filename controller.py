@@ -36,7 +36,14 @@ class AppController:
 
     def generate_world(self) -> None:
         seed = random.randint(0, 1_000_000)
-        grid = np.array(generate_world(width=40, height=30, seed=seed))
+        layered = generate_world(width=40, height=30, seed=seed)
+        # Convert list-of-list-of-dicts to a numpy object array so the
+        # renderer can index it with tile_grid[y, x].
+        height, width = len(layered), len(layered[0])
+        grid = np.empty((height, width), dtype=object)
+        for y, row in enumerate(layered):
+            for x, cell in enumerate(row):
+                grid[y, x] = cell
         self._window.display_grid(grid, seed=seed)
 
     # ------------------------------------------------------------------
