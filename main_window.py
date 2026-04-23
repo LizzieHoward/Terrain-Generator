@@ -109,19 +109,20 @@ class MainWindow(QMainWindow):
     # Public view API (called by the controller)
     # ------------------------------------------------------------------
 
-    def display_grid(self, grid: np.ndarray) -> None:
+    def display_grid(self, grid: np.ndarray, seed: int = 0) -> None:
         """
         Display *grid* in the render area.
 
-        Currently renders a plain-text summary of the grid shape as a
-        placeholder.  Replace this method body when grid_renderer is
-        integrated (pass the QGraphicsScene returned by TileRenderer.render()
-        to self._view.setScene(...)).
+        Parameters
+        ----------
+        grid : np.ndarray
+            Integer tile grid from the controller.
+        seed : int
+            Passed to the renderer so variant selection is deterministic —
+            the same seed + same grid always produces the same visual output.
         """
-        # Convert the integer grid to tile-type strings, then delegate
-        # all drawing to TileRenderer which returns a populated QGraphicsScene.
         str_grid = np.vectorize(_INT_TO_TILE.get)(grid)
-        scene = self._renderer.render(str_grid)
+        scene = self._renderer.render(str_grid, seed=seed)
         self._view.setScene(scene)
 
     # ------------------------------------------------------------------

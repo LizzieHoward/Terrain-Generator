@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 from PyQt6.QtCore import Qt, QRect
 from PyQt6.QtGui import QPixmap
@@ -38,16 +38,69 @@ TILE_SIZE = 16  # source tile dimensions in pixels (square)
 #   2 = forest  → column 8, row 6
 #   3 = rock    → column 8, row 7
 TILE_COORDS: Dict[int, Tuple[int, int]] = {
-    0: (8, 1),  # water
-    1: (8, 2),  # grass / field
-    2: (8, 6),  # forest
-    3: (8, 7),  # rock
+    0: (0, 7),  # water
+    1: (2, 5),  # grass / field
+    2: (5, 5),  # forest
+    3: (6, 5),  # rock
 }
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+def load_tile_variants(
+    tile_variants: Dict[int, List[Tuple[int, int]]],
+    display_size: int | None = None,
+    spritesheet_path: str = SPRITESHEET_PATH,
+) -> Dict[int, List[QPixmap]]:
+    """
+    Extract multiple sprite variants per tile type from the spritesheet.
+
+    Parameters
+    ----------
+    tile_variants :
+        Maps each tile type integer to a list of (col, row) coordinates
+        on the spritesheet.  Every list must be non-empty — a ValueError
+        is raised otherwise.
+    display_size :
+        If provided, each variant is scaled to this size using
+        FastTransformation (no smoothing).
+    spritesheet_path :
+        Path to the spritesheet PNG.
+
+    Returns
+    -------
+    Dict mapping tile type integer → list of QPixmap variants.
+    """
+    for tile_type, coords in tile_variants.items():
+        if not coords:
+            raise ValueError(
+                f"tile_variants[{tile_type}] is empty — "
+                "every tile type must have at least one variant."
+            )
+
+    spritesheet = _load_spritesheet(spritesheet_path)
+    result: Dict[int, List[QPixmap]] = {}
+
+    for tile_type, coords in tile_variants.items():
+        pixmaps: List[QPixmap] = []
+        for col, row in coords:
+            x = col * TILE_SIZE
+            y = row * TILE_SIZE
+            pixmap = spritesheet.copy(QRect(x, y, TILE_SIZE, TILE_SIZE))
+            if display_size is not None and display_size != TILE_SIZE:
+                pixmap = pixmap.scaled(
+                    display_size,
+                    display_size,
+                    Qt.AspectRatioMode.IgnoreAspectRatio,
+                    Qt.TransformationMode.FastTransformation,
+                )
+            pixmaps.append(pixmap)
+        result[tile_type] = pixmaps
+
+    return result
+
 
 def load_tiles(
     display_size: int | None = None,

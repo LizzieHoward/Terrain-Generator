@@ -7,14 +7,14 @@ populates a QGraphicsScene that a host window can embed inside any QGraphicsView
 """
 
 import os
-from typing import Dict
+from typing import Dict, List
 
 import numpy as np
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPixmap, QPainter
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsPixmapItem
 
-from tile_loader import load_tiles
+from tile_loader import load_tiles, load_tile_variants
 
 # Maps the integer keys returned by tile_loader to the string tile types
 # used throughout the rest of the pipeline.
@@ -45,17 +45,58 @@ class TileRenderer:
     tile_size : int
         Width and height of each tile in pixels (assumed square).
     assets_dir : str
-        Directory containing tile images named ``<tile_type>.png``
-        (e.g. ``assets/water.png``).  Missing images are replaced with
-        solid-colour rectangles so the renderer never raises on missing files.
+        Directory containing tile images named ``<tile_type>.png``.
+        Used as a fallback when no spritesheet variants are loaded.
+    tile_variants : dict, optional
+        Maps each integer tile type to a list of (col, row) spritesheet
+        coordinates.  When provided, a random variant is selected per
+        tile on each render call.  Every tile type that appears in the
+        grid must have an entry — a KeyError is raised at render time
+        if one is missing.
+
+        Example::
+
+            tile_variants = {
+                0: [(0, 7), (1, 7)],   # water variants
+                1: [(2, 5), (3, 5)],   # grass variants
+                2: [(5, 5)],           # forest (single sprite)
+                3: [(6, 5)],           # rock   (single sprite)
+            }
     """
 
-    def __init__(self, tile_size: int = 32, assets_dir: str = "assets") -> None:
+    def __init__(
+        self,
+        tile_size: int = 32,
+        assets_dir: str = "assets",
+        tile_variants: Dict[int, List[tuple]] | None = None,
+    ) -> None:
         self.tile_size = tile_size
         self.assets_dir = assets_dir
+        # _pixmap_cache: single pixmap per tile type (non-variant path)
         self._pixmap_cache: Dict[str, QPixmap] = {}
+        # _variant_pixmaps: list of pixmaps per tile type (variant path)
+        self._variant_pixmaps: Dict[str, List[QPixmap]] = {}
         self._scene = QGraphicsScene()
-        self._preload_spritesheet_tiles()
+
+        if tile_variants is not None:
+            self._load_variant_pixmaps(tile_variants)
+        else:
+            self._preload_spritesheet_tiles()
+
+    def _load_variant_pixmaps(self, tile_variants: Dict[int, List[tuple]]) -> None:
+        """
+        Load all sprite variants from the spritesheet and store them keyed
+        by tile type string.  Raises ValueError if any list is empty.
+        """
+        try:
+            int_variants = load_tile_variants(tile_variants, display_size=self.tile_size)
+            for int_type, pixmaps in int_variants.items():
+                tile_type = _INT_TO_TILE.get(int_type, str(int_type))
+                self._variant_pixmaps[tile_type] = pixmaps
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(
+                f"[TileRenderer] Cannot load tile variants: {exc}"
+            ) from exc
 
     def _preload_spritesheet_tiles(self) -> None:
         """
@@ -77,33 +118,38 @@ class TileRenderer:
     # Public API
     # ------------------------------------------------------------------
 
-    def render(self, tile_grid: np.ndarray) -> QGraphicsScene:
+    def render(self, tile_grid: np.ndarray, seed: int = 0) -> QGraphicsScene:
         """
         Clear the internal scene and draw *tile_grid* into it.
 
         Parameters
         ----------
         tile_grid : np.ndarray
-            A (height x width) array of tile-type strings, as produced by
-            ``tile_mapper.map_tiles()``.
+            A (height x width) array of tile-type strings.
+        seed : int
+            Seed for variant selection.  The same seed + same grid always
+            produces the same visual output.  Defaults to 0.
 
         Returns
         -------
         QGraphicsScene
-            The populated scene.  Assign it to a QGraphicsView via
-            ``view.setScene(renderer.render(grid))``.
+            The populated scene.
         """
         self._scene.clear()
 
         height, width = tile_grid.shape
         ts = self.tile_size
+        use_variants = bool(self._variant_pixmaps)
+        rng = np.random.default_rng(seed) if use_variants else None
 
         for y in range(height):
             for x in range(width):
                 tile_type = str(tile_grid[y, x])
-                pixmap = self._get_pixmap(tile_type)
+                if use_variants:
+                    pixmap = self._pick_variant(tile_type, rng)
+                else:
+                    pixmap = self._get_pixmap(tile_type)
                 item = QGraphicsPixmapItem(pixmap)
-                # Disable Qt's built-in smooth transform for crisp pixel art.
                 item.setTransformationMode(Qt.TransformationMode.FastTransformation)
                 item.setPos(x * ts, y * ts)
                 self._scene.addItem(item)
@@ -119,6 +165,24 @@ class TileRenderer:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _pick_variant(self, tile_type: str, rng: np.random.Generator) -> QPixmap:
+        """
+        Randomly select one pixmap from the variant list for *tile_type*.
+
+        Raises
+        ------
+        KeyError
+            If *tile_type* has no entry in the variant map.
+        """
+        variants = self._variant_pixmaps.get(tile_type)
+        if variants is None:
+            raise KeyError(
+                f"No variants registered for tile type '{tile_type}'. "
+                "Add it to the tile_variants dict passed to TileRenderer."
+            )
+        index = int(rng.integers(0, len(variants)))
+        return variants[index]
 
     def _get_pixmap(self, tile_type: str) -> QPixmap:
         """Return a cached QPixmap for *tile_type*, loading or creating it."""

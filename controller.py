@@ -35,14 +35,9 @@ class AppController:
     # ------------------------------------------------------------------
 
     def generate_world(self) -> None:
-        """
-        Generate a placeholder world grid and send it to the view.
-
-        Replace the body of this method when the real pipeline
-        (noise_generator → tile_mapper → grid_renderer) is ready.
-        """
-        grid = np.array(generate_world(width=40, height=30, seed=random.randint(0, 1_000_000)))
-        self._window.display_grid(grid)
+        seed = random.randint(0, 1_000_000)
+        grid = np.array(generate_world(width=40, height=30, seed=seed))
+        self._window.display_grid(grid, seed=seed)
 
     # ------------------------------------------------------------------
     # Private helpers
