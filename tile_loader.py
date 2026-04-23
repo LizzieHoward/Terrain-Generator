@@ -10,6 +10,8 @@ Responsibilities:
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Dict, Tuple
 
 from PyQt6.QtCore import Qt, QRect
@@ -20,9 +22,12 @@ from PyQt6.QtGui import QPixmap
 # Spritesheet configuration
 # ---------------------------------------------------------------------------
 
-SPRITESHEET_PATH = (
-    "Tiles/Basic One Square Tiles/"
-    "color_tileset_16x16_Jerom&Eiyeron_CC-BY-SA-3.0_8.png"
+# Build an absolute path relative to this file's directory so it resolves
+# correctly regardless of the working directory, and handles special
+# characters (like &) in the filename safely.
+_HERE = Path(__file__).parent
+SPRITESHEET_PATH = str(
+    _HERE / "Tiles" / "color_tileset_16x16_Jerom&Eiyeron_CC-BY-SA-3.0_8.png"
 )
 
 TILE_SIZE = 16  # source tile dimensions in pixels (square)
