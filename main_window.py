@@ -81,11 +81,10 @@ class MainWindow(QMainWindow):
         placeholder_scene.addText("Press 'Generate' to create a world.")
 
         self._view = QGraphicsView(placeholder_scene)
-        self._view.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self._view.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        # Disable smooth pixel transforms for crisp tile rendering later.
+        # Disable smooth pixel transforms for crisp tile rendering.
         self._view.setRenderHint(self._view.renderHints().__class__.SmoothPixmapTransform, False)
 
         # --- Root layout ---
@@ -122,6 +121,8 @@ class MainWindow(QMainWindow):
         """
         scene = self._renderer.render(grid, seed=seed)
         self._view.setScene(scene)
+        # Scale the map to fill the available view area, preserving aspect ratio.
+        self._view.fitInView(scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
 
     # ------------------------------------------------------------------
     # Private slot
